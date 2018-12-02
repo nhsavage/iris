@@ -274,6 +274,33 @@ for ease of calendar-based testing.
     Selected times :
     DimCoord([2009-11-19 11:00:00], standard_name='time', calendar='gregorian')
 
+This also allows datetime ranges to be used to select data between two datetimes.
+
+.. testsetup:: time_range_constr
+
+    import numpy as np
+    sample_ts = iris.cube.Cube(np.arange(365), long_name='data', units='1')
+    _all2007 = iris.coords.DimCoord(np.arange(365), standard_name='time', units='days since 2007-01-01')
+    sample_ts.add_dim_coord(_all2007, 0)
+
+.. doctest:: time_range_constr
+
+    :options: +NORMALIZE_WHITESPACE, +ELLIPSIS
+
+    >>> print(sample_ts.coord('time'))
+    DimCoord([2007-01-01 00:00:00, 2007-01-02 00:00:00, 2007-01-03 00:00:00,
+              ...
+              2007-12-29 00:00:00, 2007-12-30 00:00:00, 2007-12-31 00:00:00],
+             standard_name='time', calendar='gregorian')
+    >>> d1 = datetime.datetime.strptime('20070416T0000Z', '%Y%m%dT%H%MZ')
+    >>> d2 = datetime.datetime.strptime('20070430T0000Z', '%Y%m%dT%H%MZ')
+    >>> data_subset = long_ts.extract(daterange)
+    >>> print(data_subset.coord('time'))
+    DimCoord([2007-01-01 00:00:00, 2007-01-02 00:00:00, 2007-01-03 00:00:00,
+              ...
+              2007-12-29 00:00:00, 2007-12-30 00:00:00, 2007-12-31 00:00:00],
+             standard_name='time', calendar='gregorian')
+
 Secondly, the :class:`iris.time` module provides flexible time comparison
 facilities.  An :class:`iris.time.PartialDateTime` object can be compared to
 objects such as :class:`datetime.datetime` instances, and this comparison will
@@ -322,8 +349,8 @@ for many years:
              standard_name='time', calendar='gregorian')
 
 We can select points within a certain part of the year, in this case between
-the 15th of July through to the 25th of August, by combining the datetime cell
-functionality with PartialDateTime:
+the 15th of July through to the 25th of August from all years, by combining
+the datetime cell functionality with PartialDateTime:
 
 .. doctest:: timeseries_range
 
