@@ -641,6 +641,171 @@ def _convert_scalar_pseudo_level_coords(lbuser5):
             (DimCoord(lbuser5, long_name='pseudo_level', units='1'), None))
     return coords_and_dims
 
+def _setup_date(year, month, day, hour, minute, second, calendar):
+    '''
+    Set up a cftime date object from the pp headers including Calendar
+
+    Inputs:
+    year - int
+    month -int
+    day - int
+    hour - int
+    minute - int
+    second - int
+    calendar - integer from 0 to 5 indicating calendar. LBTIM element IC
+    '''
+
+    if calendar == 1:
+        # Proleptic Gregorian calendar is used for T1 and T2
+        date = cftime.DatetimeGregorian(year, month, day, hour, minute, second)
+    elif calendar == 2:
+        # 360-day calendar
+        date = cftime.Datetime360Day(year, month, day, hour, minute, second)
+    elif calendar == 4:
+        # 365-day (no leap year) calendar
+        date = cftime.DatetimeNoLeap(year, month, day, hour, minute, second)
+    else:
+        # Error for now (should be easy to add 0 and 3 - do we ever get these?)
+        raise ValueError(str(calendar) + ' not a valid calendar ')
+    return date
+
+def _time_interval(lbyr, lbmon, lbdat, lbhr, lbmin, lbsec,
+                  lbyrd, lbmond, lbdatd, lbhrd, lbmind, lbsecd, lbtim):
+    '''
+    make a timedelta interval string e.g.
+    intervals='1 hour'
+
+    If interval is a whole number of years or months the code
+    will use that to calculate the time delta in years or
+    months
+    Otherwise it will generate it in days if one or more days,
+    hours if one or more hours and in minutes otherwise
+
+    >>> print (_time_interval(2010, 3, 30, 0, 0, 0,
+    ...                     2011, 3, 30, 0, 0, 0, 2))
+    1 years
+
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 6, 30, 0, 0, 0, 2))
+    4 months
+
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2011, 7, 30, 0, 0, 0, 2))
+    17 months
+
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 3, 2, 0, 0, 0, 2))
+    2 days
+    >>> print (_time_interval(2010, 1, 31, 0, 0, 0,
+    ...                     2010, 2, 2, 0, 0, 0, 1))
+    2 days
+
+    >>> print (_time_interval(2010, 1, 31, 0, 0, 0,
+    ...                     2010, 2, 2, 0, 0, 0, 4))
+    2 days
+
+    1.5 days
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 3, 1, 12, 0, 0, 2))
+    1.5 days
+
+    1 day
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 3, 1, 0, 0, 0, 2))
+    1 days
+
+    1.5 hours
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 2, 30, 1, 30, 0, 2))
+    1.5 hours
+
+    1 hour - there seems to be a bug in cfitme
+    the delta  is not 3600 seconds as it should be
+    (regardless of calendar!)
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 2, 30, 1, 0, 0, 2))
+    59.9833333333 minutes
+
+    30 minutes
+    >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 2, 30, 0, 30, 0, 2))
+    30 minutes
+
+    10 seconds
+    >>> print (time_interval(2010, 2, 30, 0, 0, 0,
+    ...                     2010, 2, 30, 0, 0, 10, 2))
+    9 seconds
+
+    The difference between the headers must be greater than 0
+    >>> print (_time_interval(2010, 3, 30, 0, 0, 0,
+    ...                     2010, 2, 30, 0, 0, 0, 2))
+    Traceback (most recent call last):
+        ...
+    ValueError: Need postitive difference between headers
+
+    Calendar must be 1, 2 or 4
+    >>> print (_time_interval(2010, 1, 31, 0, 0, 0,
+    ...                     2010, 2, 2, 0, 0, 0, 0))
+    Traceback (most recent call last):
+    ...
+    ValueError: 0 not a valid calendar
+    '''
+
+    SECS_PER_DAY = 3600 *24
+    # set up dates based on correct calendar
+    # lbtim
+    ic = lbtim % 10
+
+    date1 = _setup_date(lbyr, lbmon, lbdat, lbhr, lbmin, lbsec, ic)
+    date2 = _setup_date(lbyrd, lbmond, lbdatd, lbhrd, lbmind, lbsecd, ic)
+
+    # check for zero or negative time
+    delta = date2 - date1
+
+    if delta <= timedelta(0):
+        print(date1, date2, delta)
+        raise ValueError('Need postitive difference between headers')
+
+    # first check if we have an integer number of
+    # months or years by comparing pairs of headers
+    if (lbmon == lbmond and lbdat == lbdatd and lbhr == lbhrd
+            and lbmin == lbmind and lbsec == lbsecd):
+        deltay = lbyrd - lbyr
+        interval = (str(deltay) + ' years')
+        return interval
+
+    if (lbdat == lbdatd and lbhr == lbhrd
+            and lbmin == lbmind and lbsec == lbsecd):
+        deltay = lbyrd - lbyr
+        deltam = lbmond - lbmon + deltay*12
+        interval = (str(deltam) + ' months')
+        return interval
+
+    if delta.days > 0:
+        # whole number of days
+        if int(delta.total_seconds()) == delta.days * SECS_PER_DAY:
+            interval = (str(delta.days) + ' days')
+        else:
+            interval = (str(delta.total_seconds() / float(SECS_PER_DAY))
+                        + ' days')
+    elif delta.seconds >= 3600:
+        # now try hours - ignore microseconds for this purpose -
+        # pp can only store data to the nearest second
+        # whole number of days
+        if delta.seconds%3600 == 0:
+            interval = (str(delta.seconds/3600) + ' hours')
+        else:
+            interval = (str(delta.seconds/3600.0) + ' hours')
+    elif delta.seconds >= 60:
+        if delta.seconds%60 == 0:
+            interval = (str(delta.seconds/60) + ' minutes')
+        else:
+            interval = (str(delta.seconds/60.0) + ' minutes')
+    else:
+        interval = (str(delta.seconds) + ' seconds')
+    return interval
+
+
 
 def convert(f):
     """
@@ -973,7 +1138,11 @@ def _all_other_rules(f):
 
     if time_method is not None:
         if f.lbtim.ia != 0:
-            intervals = '{} hour'.format(f.lbtim.ia)
+            intervals = _time_interval(f.lbyr, f.lbmon, f.lbdat, 
+                                       f.lbhr, f.lbmin, f.lbsec,
+                                       f.lbyrd, f.lbmond, f.lbdatd, 
+                                       f.lbhrd, f.lbmind, f.lbsecd, 
+                                       f.lbtim)
         else:
             intervals = None
 
