@@ -23,8 +23,10 @@ import six
 # SciTools/iris-code-generators:tools/gen_rules.py
 
 import cf_units
+import cftime
 import numpy as np
 import calendar
+import datetime
 
 from iris.aux_factory import HybridHeightFactory, HybridPressureFactory
 from iris.coords import AuxCoord, CellMethod, DimCoord
@@ -682,11 +684,11 @@ def _time_interval(lbyr, lbmon, lbdat, lbhr, lbmin, lbsec,
     hours if one or more hours and in minutes otherwise
 
     >>> print (_time_interval(2010, 3, 30, 0, 0, 0,
-    ...                     2011, 3, 30, 0, 0, 0, 2))
+    ...                       2011, 3, 30, 0, 0, 0, 2))
     1 years
 
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 6, 30, 0, 0, 0, 2))
+    ...                       2010, 6, 30, 0, 0, 0, 2))
     4 months
 
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
@@ -694,51 +696,51 @@ def _time_interval(lbyr, lbmon, lbdat, lbhr, lbmin, lbsec,
     17 months
 
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 3, 2, 0, 0, 0, 2))
+    ...                       2010, 3, 2, 0, 0, 0, 2))
     2 days
     >>> print (_time_interval(2010, 1, 31, 0, 0, 0,
-    ...                     2010, 2, 2, 0, 0, 0, 1))
+    ...                       2010, 2, 2, 0, 0, 0, 1))
     2 days
 
     >>> print (_time_interval(2010, 1, 31, 0, 0, 0,
-    ...                     2010, 2, 2, 0, 0, 0, 4))
+    ...                       2010, 2, 2, 0, 0, 0, 4))
     2 days
 
     1.5 days
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 3, 1, 12, 0, 0, 2))
+    ...                       2010, 3, 1, 12, 0, 0, 2))
     1.5 days
 
     1 day
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 3, 1, 0, 0, 0, 2))
+    ...                       2010, 3, 1, 0, 0, 0, 2))
     1 days
 
     1.5 hours
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 2, 30, 1, 30, 0, 2))
+    ...                       2010, 2, 30, 1, 30, 0, 2))
     1.5 hours
 
     1 hour - there seems to be a bug in cfitme
     the delta  is not 3600 seconds as it should be
     (regardless of calendar!)
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 2, 30, 1, 0, 0, 2))
+    ...                       2010, 2, 30, 1, 0, 0, 2))
     59.9833333333 minutes
 
     30 minutes
     >>> print (_time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 2, 30, 0, 30, 0, 2))
+    ...                       2010, 2, 30, 0, 30, 0, 2))
     30 minutes
 
     10 seconds
     >>> print (time_interval(2010, 2, 30, 0, 0, 0,
-    ...                     2010, 2, 30, 0, 0, 10, 2))
+    ...                      2010, 2, 30, 0, 0, 10, 2))
     9 seconds
 
     The difference between the headers must be greater than 0
     >>> print (_time_interval(2010, 3, 30, 0, 0, 0,
-    ...                     2010, 2, 30, 0, 0, 0, 2))
+    ...                       2010, 2, 30, 0, 0, 0, 2))
     Traceback (most recent call last):
         ...
     ValueError: Need postitive difference between headers
@@ -751,7 +753,7 @@ def _time_interval(lbyr, lbmon, lbdat, lbhr, lbmin, lbsec,
     ValueError: 0 not a valid calendar
     '''
 
-    SECS_PER_DAY = 3600 *24
+    secs_per_day = 3600 *24
     # set up dates based on correct calendar
     # lbtim
     ic = lbtim % 10
@@ -762,18 +764,19 @@ def _time_interval(lbyr, lbmon, lbdat, lbhr, lbmin, lbsec,
     # check for zero or negative time
     delta = date2 - date1
 
-    if delta <= timedelta(0):
+    if delta <= datetime.timedelta(0):
         print(date1, date2, delta)
         raise ValueError('Need postitive difference between headers')
 
     # first check if we have an integer number of
-    # months or years by comparing pairs of headers
+    # years by comparing pairs of headers
     if (lbmon == lbmond and lbdat == lbdatd and lbhr == lbhrd
             and lbmin == lbmind and lbsec == lbsecd):
         deltay = lbyrd - lbyr
         interval = (str(deltay) + ' years')
         return interval
 
+    # next check for an integer number of months
     if (lbdat == lbdatd and lbhr == lbhrd
             and lbmin == lbmind and lbsec == lbsecd):
         deltay = lbyrd - lbyr
@@ -783,10 +786,10 @@ def _time_interval(lbyr, lbmon, lbdat, lbhr, lbmin, lbsec,
 
     if delta.days > 0:
         # whole number of days
-        if int(delta.total_seconds()) == delta.days * SECS_PER_DAY:
+        if int(delta.total_seconds()) == delta.days * secs_per_day:
             interval = (str(delta.days) + ' days')
         else:
-            interval = (str(delta.total_seconds() / float(SECS_PER_DAY))
+            interval = (str(delta.total_seconds() / float(secs_per_day))
                         + ' days')
     elif delta.seconds >= 3600:
         # now try hours - ignore microseconds for this purpose -
@@ -1138,10 +1141,10 @@ def _all_other_rules(f):
 
     if time_method is not None:
         if f.lbtim.ia != 0:
-            intervals = _time_interval(f.lbyr, f.lbmon, f.lbdat, 
+            intervals = _time_interval(f.lbyr, f.lbmon, f.lbdat,
                                        f.lbhr, f.lbmin, f.lbsec,
-                                       f.lbyrd, f.lbmond, f.lbdatd, 
-                                       f.lbhrd, f.lbmind, f.lbsecd, 
+                                       f.lbyrd, f.lbmond, f.lbdatd,
+                                       f.lbhrd, f.lbmind, f.lbsecd,
                                        f.lbtim)
         else:
             intervals = None
