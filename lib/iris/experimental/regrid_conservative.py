@@ -128,7 +128,7 @@ def _make_esmpy_field(
     return field
 
 
-def regrid_conservative_via_esmpy(source_cube, grid_cube):
+def regrid_conservative_via_esmpy(source_cube, grid_cube, md_tol = 1.0e-8):
     """
     Perform a conservative regridding with ESMPy.
 
@@ -247,9 +247,11 @@ def regrid_conservative_via_esmpy(source_cube, grid_cube):
         coverage_field = ESMF.Field(dst_field.grid, "validmask_dst")
 
         # Do the actual regrid with ESMF.
+        mask_flag_values = np.array([1], dtype=np.int32)
         regrid_method = ESMF.Regrid(
             src_field,
             dst_field,
+            src_mask_values=mask_flag_values,
             regrid_method=ESMF.RegridMethod.CONSERVE,
             unmapped_action=ESMF.UnmappedAction.IGNORE,
             dst_frac_field=coverage_field,
@@ -260,7 +262,7 @@ def regrid_conservative_via_esmpy(source_cube, grid_cube):
         # Convert destination 'coverage fraction' into a missing-data mask.
         # Set = wherever part of cell goes outside source grid, or overlaps a
         # masked source cell.
-        coverage_tolerance_threshold = 1.0 - 1.0e-8
+        coverage_tolerance_threshold = 1 - md_tol
         data.mask = coverage_field.data < coverage_tolerance_threshold
 
         # Transpose ESMF result dims (X,Y) back to the order of the source
